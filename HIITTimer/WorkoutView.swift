@@ -59,7 +59,7 @@ struct WorkoutView: View {
     }
 
     private func active(_ step: WorkoutStep) -> some View {
-        VStack(spacing: 28) {
+        VStack(spacing: 14) {
             if step.kind != .prepare {
                 Text("Round \(step.round) · Exercise \(step.exerciseNumber)")
                     .font(.subheadline.weight(.semibold))
@@ -73,24 +73,33 @@ struct WorkoutView: View {
 
             ZStack {
                 Circle()
-                    .stroke(.white.opacity(0.25), lineWidth: 16)
+                    .stroke(.white.opacity(0.25), lineWidth: 12)
                 Circle()
                     .trim(from: 0, to: 1 - engine.stepProgress)
-                    .stroke(.white, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                    .stroke(.white, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Text("\(engine.secondsLeft)")
-                    .font(.system(size: 110, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .padding(32)
+                // Shows the current exercise, or a preview of the next one while resting.
+                FigureView(animation: FigureLibrary.animation(for: figureName(for: step)),
+                           paused: engine.isPaused)
+                    .padding(44)
+                    .opacity(step.kind == .work ? 1 : 0.6)
             }
+            .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: 280, maxHeight: 280)
+
+            Text("\(engine.secondsLeft)")
+                .font(.system(size: 84, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
 
             Text(step.next.map { "Next: \($0)" } ?? "Last one!")
                 .font(.title3.weight(.semibold))
                 .opacity(0.9)
         }
+    }
+
+    private func figureName(for step: WorkoutStep) -> String {
+        step.kind == .work ? step.title : (step.next ?? step.title)
     }
 
     private var finished: some View {

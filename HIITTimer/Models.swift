@@ -52,7 +52,7 @@ struct WorkoutStep {
 }
 
 extension WorkoutSettings {
-    static let prepareSeconds = 5
+    static let prepareSeconds = 10
 
     func buildSteps() -> [WorkoutStep] {
         let active = activeExercises

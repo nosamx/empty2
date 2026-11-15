@@ -2,48 +2,59 @@ import AVFoundation
 import Foundation
 
 /// Speaks prompts over any music that is playing, ducking it only while talking.
+/// All audio work runs on a background queue so it never stalls the timer display.
 final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
+    private let queue = DispatchQueue(label: "hiit.speaker", qos: .userInitiated)
     private let synthesizer = AVSpeechSynthesizer()
     private let voice = AVSpeechSynthesisVoice(language: "en-US")
+    private var generation = 0
     var enabled = true
 
     override init() {
         super.init()
         synthesizer.delegate = self
-        try? AVAudioSession.sharedInstance().setCategory(
-            .playback, mode: .voicePrompt, options: [.mixWithOthers, .duckOthers])
+        queue.async {
+            try? AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .voicePrompt, options: [.mixWithOthers, .duckOthers])
+        }
     }
 
     func speak(_ text: String) {
         guard enabled else { return }
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
+        queue.async { [self] in
+            generation += 1
+            if synthesizer.isSpeaking {
+                synthesizer.stopSpeaking(at: .immediate)
+            }
+            try? AVAudioSession.sharedInstance().setActive(true)
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.voice = voice
+            utterance.rate = 0.52
+            utterance.volume = 1.0
+            synthesizer.speak(utterance)
         }
-        try? AVAudioSession.sharedInstance().setActive(true)
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = voice
-        utterance.rate = 0.52
-        utterance.volume = 1.0
-        synthesizer.speak(utterance)
     }
 
     func stop() {
-        synthesizer.stopSpeaking(at: .immediate)
+        queue.async { [self] in
+            generation += 1
+            synthesizer.stopSpeaking(at: .immediate)
+            releaseSessionSoon()
+        }
     }
 
-    private func releaseSessionIfIdle() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, !self.synthesizer.isSpeaking else { return }
+    /// Lets music return to full volume once nothing has been said for a moment.
+    /// The delay keeps the session open across the 3-2-1 countdown.
+    private func releaseSessionSoon() {
+        let current = generation
+        queue.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            guard let self, self.generation == current, !self.synthesizer.isSpeaking else { return }
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        releaseSessionIfIdle()
-    }
-
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        releaseSessionIfIdle()
+        queue.async { [weak self] in self?.releaseSessionSoon() }
     }
 }
 

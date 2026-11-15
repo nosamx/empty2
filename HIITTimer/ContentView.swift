@@ -5,6 +5,8 @@ struct ContentView: View {
     @StateObject private var engine = WorkoutEngine()
     @State private var showingWorkout = false
     @State private var confirmingReset = false
+    @State private var addingExercise = false
+    @State private var newExerciseName = ""
 
     private let durationRange = 5...600
 
@@ -78,10 +80,19 @@ struct ContentView: View {
                     .onMove { from, to in
                         store.settings.exercises.move(fromOffsets: from, toOffset: to)
                     }
+                    .onDelete { offsets in
+                        store.settings.exercises.remove(atOffsets: offsets)
+                    }
+                    Button {
+                        newExerciseName = ""
+                        addingExercise = true
+                    } label: {
+                        Label("Add Exercise", systemImage: "plus.circle.fill")
+                    }
                 } header: {
                     Text("Exercises")
                 } footer: {
-                    Text("Tap the circle to include or skip an exercise. Tap Edit to reorder.")
+                    Text("Tap the circle to include or skip an exercise. Swipe left to delete. Tap Edit to reorder.")
                 }
 
                 Section {
@@ -115,6 +126,17 @@ struct ContentView: View {
                 Button("Reset", role: .destructive) {
                     store.settings = .standard
                 }
+            }
+            .alert("New Exercise", isPresented: $addingExercise) {
+                TextField("Name", text: $newExerciseName)
+                Button("Add") {
+                    let name = newExerciseName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !name.isEmpty {
+                        store.settings.exercises.append(
+                            Exercise(name: name, duration: WorkoutSettings.defaultDuration))
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
             }
             .fullScreenCover(isPresented: $showingWorkout, onDismiss: { engine.stop() }) {
                 WorkoutView(engine: engine)
